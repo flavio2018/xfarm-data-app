@@ -1,0 +1,6 @@
+name: xfarm
+
+dependencies:
+        - python
+        - requests
+        - matplotlib
