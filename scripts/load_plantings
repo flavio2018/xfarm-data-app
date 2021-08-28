@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+
+"""This script loads plantings from a csv file to FarmOS
+
+This script uses APIs from FarmOS in order to interact with its
+assets and events. In order to define a planting, the category of
+the crop is retrieved and its id is being used. The same process is
+handled for what concerns the location of the planting. Then a
+POST request is sent to the endpoint in order to create the asset,
+and another one is sent in order to create a movement event and
+define the location of the asset.
+
+    Args:
+        filename: File location of the csv file (required)
+        farmos_url: URL of the FarmOS server (required)
+        token: CSRF Token for the authentication (required)
+        cookie_file: File location of the cookie (required)
+
+    Returns:
+        Nothing.
+"""
+
+import click
+import requests
+from pathlib import Path
+from http.cookiejar import MozillaCookieJar
+import json
+import pandas as pd
+
+# filename='plantings.csv'
+# token='6vJHjDg0u7a2YkW2k1IPFy88vyVTax-8h1Lb9DLfYjw'
+# cookie_file='farmOS-cookie.txt'
+# farmos_url='http://192.168.8.106'
+
+@click.command()
+@click.option('--filename', default='plantings.csv', help='File location of the csv file')
+@click.option('--farmos_url', default='http://192.168.8.106', help='URL of the FarmOS server')
+@click.option('--token', default='6vJHjDg0u7a2YkW2k1IPFy88vyVTax-8h1Lb9DLfYjw', help='CSRF Token for the authentication')
+@click.option('--cookie_file', default='farmOS-cookie.txt', help='cookie_file: File location of the cookie')
+def load_asset(filename, farmos_url, token, cookie_file):
+
+    # loading csv file in pandas dataframe and transforming into iterable dict
+    df=pd.read_csv(filename)
+    df_dict=df.to_dict('records')
+
+    # defining auth parameters for FarmOS
+    headers = {
+        'X-CSRF-Token': token,
+        'Content-Type': 'application/json'
+    }
+
+    cookies = Path(cookie_file)
+    jar = MozillaCookieJar(cookies)
+    jar.load()
+
+    # iterating through csv entries and loading informations
+    for pa in df_dict:
+        location = pa['location']
+        name = pa['name']
+        crop = pa['crop']
+        description = pa['description']
+
+        req_get_crop = requests.get(f'{farmos_url}/taxonomy_term.json?bundle=farm_crops&name={crop}', cookies=jar, headers=headers)
+        crop_obj = json.loads(req_get_crop.content)
+        crop_tid = crop_obj['list'][0]['tid']
+
+        planting_post_data = {
+            'name': name,
+            'type': 'planting',
+            # TODO: add description field
+            # 'description': {
+            #     'value': description,
+            #     'format': 'farm_format'
+            # },
+            'crop': [
+                {'id': crop_tid}
+            ]
+        }
+
+        req_post_planting = requests.post(f'{farmos_url}/farm_asset', cookies=jar, headers=headers, data=json.dumps(planting_post_data))
+        curr_planting_id = json.loads(req_post_planting.content)['id']
+
+        req_get_area = requests.get(f'{farmos_url}/taxonomy_term.json?bundle=farm_areas&name={location}', cookies=jar, headers=headers)
+        area_obj = json.loads(req_get_area.content)
+        area_tid = area_obj['list'][0]['tid']
+        area_url = area_obj['list'][0]['url']
+
+        planting_area_post_data = {
+            'name': f"{name} located in {location}",
+            'type': 'farm_observation',
+            'done': 1,
+            'asset': [
+                {
+                    'id': curr_planting_id
+                }
+            ],
+            'movement': {
+                'area': [
+                    {
+                        'uri': area_url,
+                        'id': area_tid,
+                        'resource': 'taxonomy_term',
+                        'name': location
+                    }
+                ]
+            }
+        }
+
+        req_post_log_area = requests.post(f'{farmos_url}/log', cookies=jar, headers=headers, data=json.dumps(planting_area_post_data))
+
+        print(f'Inserted record for {name} in {location}!')
+
+if __name__ == '__main__':
+    load_asset()
