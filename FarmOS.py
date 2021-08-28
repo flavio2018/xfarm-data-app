@@ -3,7 +3,6 @@ This file contains the implementation of the main FarmOS object that can be used
 log and assets data.
 """
 import requests
-import json
 
 
 class FarmOS:
