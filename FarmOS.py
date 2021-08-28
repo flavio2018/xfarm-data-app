@@ -18,24 +18,31 @@ class FarmOS:
         sensor.set_hostname(self.hostname)
         self.sensors[sensor.name] = sensor
 
-    def get_logs(self, filters: dict) -> str:
+    def get(self, resource, filters):
         """
         :param filters: A dict { str : str } with filter name as key and filter value as value.
             Example input: {'type': 'soil_test', 'log_category': 'soil'}
+        :param resource: A string among: "log", "asset".
         :return: The API response as JSON formatted string.
         """
-        url = f"http://{self.hostname}/log.json?"
+
+        if resource == 'log':
+            url = f"http://{self.hostname}/log.json?"
+        elif resource == 'asset':
+            url = f"http://{self.hostname}/farm_asset.json?"
+        else:
+            print(f"Unrecognized resource: {resource}")
+            return
 
         for f_name, f_value in filters.items():
-            if f_name == 'type':
+            if resource == 'log' and f_name == 'type':
                 url += f"{f_name}=farm_{f_value}&"
-            else:
+            elif (resource == 'asset' and f_name == 'type') or f_name == 'category':
                 url += f"{f_name}={f_value}&"
+            else:
+                print(f"Unrecognized filters: {filters}")
+                return
 
         res = requests.get(url)
 
         return res.text
-
-
-    def get_assets(self, filters):
-        pass
