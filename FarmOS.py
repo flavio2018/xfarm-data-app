@@ -17,18 +17,18 @@ class FarmOS:
         sensor.set_hostname(self.hostname)
         self.sensors[sensor.name] = sensor
 
-    def get(self, resource, filters):
+    def get(self, resource, filters={}):
         """
         :param filters: A dict { str : str } with filter name as key and filter value as value.
             Example input: {'type': 'soil_test', 'log_category': 'soil'}
-        :param resource: A string among: "log", "asset".
+        :param resource: A string among: "log", "asset"
         :return: The API response as JSON formatted string.
         """
-
+        base_url = f"http://{self.hostname}"
         if resource == 'log':
-            url = f"http://{self.hostname}/log.json?"
+            url = f"{base_url}/log.json?"
         elif resource == 'asset':
-            url = f"http://{self.hostname}/farm_asset.json?"
+            url = f"{base_url}/farm_asset.json?"
         else:
             print(f"Unrecognized resource: {resource}")
             return
@@ -36,11 +36,25 @@ class FarmOS:
         for f_name, f_value in filters.items():
             if resource == 'log' and f_name == 'type':
                 url += f"{f_name}=farm_{f_value}&"
-            elif (resource == 'asset' and f_name == 'type') or f_name == 'category':
+            elif (resource == 'asset' and f_name == 'type') or f_name == 'log_category':
                 url += f"{f_name}={f_value}&"
             else:
                 print(f"Unrecognized filters: {filters}")
                 return
+
+        res = requests.get(url)
+
+        return res.text
+
+    def get_taxonomy(self, terms):
+        """
+        :param terms: One of the terms of the taxonomy (es. "areas", "crops", "log_categories").
+        """
+        base_url = f"http://{self.hostname}"
+        url = f"{base_url}/taxonomy_term.json?"
+
+        for term in terms:
+            url += f"bundle=farm_{term}"
 
         res = requests.get(url)
 
